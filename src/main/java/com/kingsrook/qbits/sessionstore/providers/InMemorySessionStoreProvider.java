@@ -159,6 +159,48 @@ public class InMemorySessionStoreProvider implements QSessionStoreProviderInterf
 
 
    /***************************************************************************
+    ** Get the default TTL for sessions.
+    ***************************************************************************/
+   @Override
+   public Duration getDefaultTtl()
+   {
+      return defaultTtl;
+   }
+
+
+
+   /***************************************************************************
+    ** Load a session and touch it in a single atomic operation.
+    ***************************************************************************/
+   @Override
+   public Optional<QSession> loadAndTouch(String sessionUuid)
+   {
+      CachedSession cached = cache.get(sessionUuid);
+      if(cached == null)
+      {
+         return Optional.empty();
+      }
+
+      if(cached.isExpired())
+      {
+         cache.remove(sessionUuid);
+         LOG.debug("Session expired", logPair("sessionUuid", sessionUuid));
+         return Optional.empty();
+      }
+
+      //////////////////////////////////////////////////////////////////////
+      // Atomically update the TTL while returning the session            //
+      //////////////////////////////////////////////////////////////////////
+      Instant newExpiresAt = Instant.now().plus(defaultTtl);
+      cache.put(sessionUuid, new CachedSession(cached.session(), newExpiresAt));
+      LOG.debug("Loaded and touched session", logPair("sessionUuid", sessionUuid), logPair("newExpiresAt", newExpiresAt));
+
+      return Optional.of(cached.session());
+   }
+
+
+
+   /***************************************************************************
     ** Clean up expired sessions.
     ***************************************************************************/
    @Override

@@ -231,6 +231,94 @@ public class TableBasedSessionStoreProvider implements QSessionStoreProviderInte
 
 
    /***************************************************************************
+    ** Get the default TTL for sessions.
+    ***************************************************************************/
+   @Override
+   public Duration getDefaultTtl()
+   {
+      return defaultTtl;
+   }
+
+
+
+   /***************************************************************************
+    ** Load a session and touch it in a single operation.
+    **
+    ** Optimized to perform both load and TTL update in one database round-trip
+    ** by updating the expiresAt during the same get+update operation.
+    ***************************************************************************/
+   @Override
+   public Optional<QSession> loadAndTouch(String sessionUuid)
+   {
+      try
+      {
+         return runWithSystemSession(() ->
+         {
+            GetInput getInput = new GetInput();
+            getInput.setTableName(tableName);
+            getInput.setUniqueKey(Map.of(StoredSession.FIELD_SESSION_UUID, sessionUuid));
+            GetOutput getOutput = new GetAction().execute(getInput);
+
+            QRecord record = getOutput.getRecord();
+            if(record == null)
+            {
+               return Optional.empty();
+            }
+
+            Instant expiresAt = record.getValueInstant(StoredSession.FIELD_EXPIRES_AT);
+            if(expiresAt != null && Instant.now().isAfter(expiresAt))
+            {
+               ///////////////////////////////
+               // Session is expired, clean up //
+               ///////////////////////////////
+               DeleteInput deleteInput = new DeleteInput();
+               deleteInput.setTableName(tableName);
+               deleteInput.setQueryFilter(new QQueryFilter()
+                  .withCriteria(new QFilterCriteria(StoredSession.FIELD_SESSION_UUID, QCriteriaOperator.EQUALS, sessionUuid)));
+               new DeleteAction().execute(deleteInput);
+               LOG.debug("Session expired", logPair("sessionUuid", sessionUuid));
+               return Optional.<QSession>empty();
+            }
+
+            ///////////////////////////////
+            // Update expiresAt (touch)  //
+            ///////////////////////////////
+            Instant newExpiresAt = Instant.now().plus(defaultTtl);
+            QRecord updateRecord = new QRecord()
+               .withValue("id", record.getValue("id"))
+               .withValue(StoredSession.FIELD_EXPIRES_AT, newExpiresAt);
+
+            UpdateInput updateInput = new UpdateInput();
+            updateInput.setTableName(tableName);
+            updateInput.setRecords(List.of(updateRecord));
+            new UpdateAction().execute(updateInput);
+
+            ///////////////////////////////
+            // Return the session        //
+            ///////////////////////////////
+            String sessionJson = record.getValueString(StoredSession.FIELD_SESSION_DATA);
+            try
+            {
+               QSession session = JsonUtils.toObject(sessionJson, QSession.class);
+               LOG.debug("Loaded and touched session", logPair("sessionUuid", sessionUuid), logPair("newExpiresAt", newExpiresAt));
+               return Optional.of(session);
+            }
+            catch(java.io.IOException e)
+            {
+               throw new QException("Failed to deserialize session", e);
+            }
+         });
+      }
+      catch(Exception e)
+      {
+         LOG.warn("Failed to load and touch session", logPair("sessionUuid", sessionUuid), e);
+         return Optional.empty();
+      }
+   }
+
+
+
+   /***************************************************************************
     ** Clean up expired sessions.
     ***************************************************************************/
    @Override

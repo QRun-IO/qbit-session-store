@@ -179,6 +179,70 @@ public class RedisSessionStoreProvider implements QSessionStoreProviderInterface
 
 
    /***************************************************************************
+    ** Get the default TTL for sessions.
+    ***************************************************************************/
+   @Override
+   public Duration getDefaultTtl()
+   {
+      return defaultTtl;
+   }
+
+
+
+   /***************************************************************************
+    ** Load a session and touch it in a single operation.
+    **
+    ** Uses GETEX command (Redis 6.2+) for atomic get-and-reset-TTL when available,
+    ** falling back to separate GET + EXPIRE commands for older Redis versions.
+    ***************************************************************************/
+   @Override
+   public Optional<QSession> loadAndTouch(String sessionUuid)
+   {
+      try(Jedis jedis = jedisPool.getResource())
+      {
+         String key = buildKey(sessionUuid);
+
+         ///////////////////////////////////////////////////////////////////////
+         // Try GETEX first (Redis 6.2+) - atomic get with TTL reset         //
+         // Fallback to GET + EXPIRE for older Redis versions                 //
+         ///////////////////////////////////////////////////////////////////////
+         String sessionJson;
+         try
+         {
+            sessionJson = jedis.getEx(key, redis.clients.jedis.params.GetExParams.getExParams().ex(defaultTtl.toSeconds()));
+         }
+         catch(Exception e)
+         {
+            ///////////////////////////////
+            // GETEX not available, use fallback //
+            ///////////////////////////////
+            LOG.debug("GETEX not available, using GET+EXPIRE fallback", e);
+            sessionJson = jedis.get(key);
+            if(sessionJson != null)
+            {
+               jedis.expire(key, defaultTtl.toSeconds());
+            }
+         }
+
+         if(sessionJson == null)
+         {
+            return Optional.empty();
+         }
+
+         QSession session = JsonUtils.toObject(sessionJson, QSession.class);
+         LOG.debug("Loaded and touched session in Redis", logPair("sessionUuid", sessionUuid), logPair("newTtlSeconds", defaultTtl.toSeconds()));
+         return Optional.of(session);
+      }
+      catch(Exception e)
+      {
+         LOG.warn("Failed to load and touch session in Redis", logPair("sessionUuid", sessionUuid), e);
+         return Optional.empty();
+      }
+   }
+
+
+
+   /***************************************************************************
     ** Clean up expired sessions. Redis handles TTL natively, so this is a no-op.
     ***************************************************************************/
    @Override

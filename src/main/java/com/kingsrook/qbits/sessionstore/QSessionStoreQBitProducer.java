@@ -25,6 +25,7 @@ import com.kingsrook.qqq.backend.core.logging.QLogger;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.metadata.qbits.QBitMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.qbits.QBitProducer;
+import com.kingsrook.qqq.backend.core.modules.authentication.QSessionStoreRegistry;
 import static com.kingsrook.qqq.backend.core.logging.LogUtils.logPair;
 
 
@@ -100,6 +101,12 @@ public class QSessionStoreQBitProducer implements QBitProducer
       ///////////////////////////////
       QSessionStoreQBitContext.setConfig(config);
       QSessionStoreQBitContext.setProvider(provider);
+
+      ///////////////////////////////
+      // Register with core registry //
+      ///////////////////////////////
+      QSessionStoreRegistry.getInstance().register(provider);
+      LOG.info("Registered session store provider with core registry");
    }
 
 

@@ -16,13 +16,11 @@
 package com.kingsrook.qbits.sessionstore;
 
 
-import java.time.Duration;
-import java.util.Optional;
-import com.kingsrook.qqq.backend.core.model.session.QSession;
-
-
 /*******************************************************************************
- ** Strategy interface for session storage providers.
+ ** Strategy interface for session storage providers in the QBit.
+ **
+ ** Extends the core QSessionStoreProviderInterface and adds QBit-specific
+ ** methods for configuration, cleanup, and monitoring.
  **
  ** Implementations provide different backends for session persistence:
  ** - InMemory: ConcurrentHashMap for dev/testing
@@ -31,31 +29,8 @@ import com.kingsrook.qqq.backend.core.model.session.QSession;
  ** - Custom: User-provided via QCodeReference
  *******************************************************************************/
 public interface QSessionStoreProviderInterface
+   extends com.kingsrook.qqq.backend.core.modules.authentication.QSessionStoreProviderInterface
 {
-
-   /***************************************************************************
-    ** Store a session with the given TTL.
-    ***************************************************************************/
-   void store(String sessionUuid, QSession session, Duration ttl);
-
-
-   /***************************************************************************
-    ** Load a session by UUID.
-    ***************************************************************************/
-   Optional<QSession> load(String sessionUuid);
-
-
-   /***************************************************************************
-    ** Remove a session by UUID.
-    ***************************************************************************/
-   void remove(String sessionUuid);
-
-
-   /***************************************************************************
-    ** Touch a session to reset its TTL (sliding expiration).
-    ***************************************************************************/
-   void touch(String sessionUuid);
-
 
    /***************************************************************************
     ** Clean up expired sessions.
