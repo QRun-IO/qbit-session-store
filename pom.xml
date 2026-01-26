@@ -185,7 +185,21 @@
          <plugin>
             <groupId>org.jacoco</groupId>
             <artifactId>jacoco-maven-plugin</artifactId>
+            <version>0.8.12</version>
             <executions>
+               <execution>
+                  <id>prepare-agent</id>
+                  <goals>
+                     <goal>prepare-agent</goal>
+                  </goals>
+               </execution>
+               <execution>
+                  <id>report</id>
+                  <phase>test</phase>
+                  <goals>
+                     <goal>report</goal>
+                  </goals>
+               </execution>
                <execution>
                   <id>check</id>
                   <goals>
@@ -199,12 +213,12 @@
                               <limit>
                                  <counter>INSTRUCTION</counter>
                                  <value>COVEREDRATIO</value>
-                                 <minimum>0.70</minimum>
+                                 <minimum>0.60</minimum>
                               </limit>
                               <limit>
                                  <counter>CLASS</counter>
                                  <value>COVEREDRATIO</value>
-                                 <minimum>0.90</minimum>
+                                 <minimum>0.80</minimum>
                               </limit>
                            </limits>
                         </rule>

@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
+import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -188,6 +189,124 @@ class QSessionStoreQBitConfigTest
       QSessionStoreQBitConfig config = new QSessionStoreQBitConfig();
 
       assertThat(config.applyPrefix("storedSession")).isEqualTo("storedSession");
+   }
+
+
+
+   /***************************************************************************
+    ** Test validation for TABLE_BASED with backend not found.
+    ***************************************************************************/
+   @Test
+   void testValidate_tableBasedBackendNotFound_addsError()
+   {
+      QSessionStoreQBitConfig config = new QSessionStoreQBitConfig()
+         .withProviderType(QSessionStoreProviderType.TABLE_BASED)
+         .withBackendName("nonexistentBackend");
+      QInstance qInstance = new QInstance();
+      List<String> errors = new ArrayList<>();
+
+      config.validate(qInstance, errors);
+
+      assertThat(errors).contains("Backend not found: nonexistentBackend");
+   }
+
+
+
+   /***************************************************************************
+    ** Test all setters are covered (standard setters).
+    ***************************************************************************/
+   @Test
+   void testStandardSetters()
+   {
+      QSessionStoreQBitConfig config = new QSessionStoreQBitConfig();
+
+      config.setProviderType(QSessionStoreProviderType.IN_MEMORY);
+      config.setDefaultTtl(Duration.ofMinutes(45));
+      config.setEnableSlidingExpiration(false);
+      config.setBackendName("backend");
+      config.setTableName("table");
+      config.setTableNamePrefix("prefix_");
+      config.setMaxCacheSize(500);
+      config.setRedisHost("host");
+      config.setRedisPort(1234);
+      config.setRedisPassword("pass");
+      config.setRedisKeyPrefix("key:");
+      config.setEnableCleanupProcess(false);
+      config.setCleanupIntervalSeconds(600);
+
+      assertThat(config.getProviderType()).isEqualTo(QSessionStoreProviderType.IN_MEMORY);
+      assertThat(config.getDefaultTtl()).isEqualTo(Duration.ofMinutes(45));
+      assertThat(config.getEnableSlidingExpiration()).isFalse();
+      assertThat(config.getBackendName()).isEqualTo("backend");
+      assertThat(config.getTableName()).isEqualTo("table");
+      assertThat(config.getTableNamePrefix()).isEqualTo("prefix_");
+      assertThat(config.getMaxCacheSize()).isEqualTo(500);
+      assertThat(config.getRedisHost()).isEqualTo("host");
+      assertThat(config.getRedisPort()).isEqualTo(1234);
+      assertThat(config.getRedisPassword()).isEqualTo("pass");
+      assertThat(config.getRedisKeyPrefix()).isEqualTo("key:");
+      assertThat(config.getEnableCleanupProcess()).isFalse();
+      assertThat(config.getCleanupIntervalSeconds()).isEqualTo(600);
+   }
+
+
+
+   /***************************************************************************
+    ** Test TABLE_BASED fluent setters.
+    ***************************************************************************/
+   @Test
+   void testTableBasedFluentSetters()
+   {
+      QSessionStoreQBitConfig config = new QSessionStoreQBitConfig()
+         .withProviderType(QSessionStoreProviderType.TABLE_BASED)
+         .withBackendName("myBackend")
+         .withTableName("myTable")
+         .withTableNamePrefix("app_")
+         .withEnableCleanupProcess(true)
+         .withCleanupIntervalSeconds(120);
+
+      assertThat(config.getBackendName()).isEqualTo("myBackend");
+      assertThat(config.getTableName()).isEqualTo("myTable");
+      assertThat(config.getTableNamePrefix()).isEqualTo("app_");
+      assertThat(config.getEnableCleanupProcess()).isTrue();
+      assertThat(config.getCleanupIntervalSeconds()).isEqualTo(120);
+   }
+
+
+
+   /***************************************************************************
+    ** Test IN_MEMORY fluent setters.
+    ***************************************************************************/
+   @Test
+   void testInMemoryFluentSetters()
+   {
+      QSessionStoreQBitConfig config = new QSessionStoreQBitConfig()
+         .withProviderType(QSessionStoreProviderType.IN_MEMORY)
+         .withMaxCacheSize(5000);
+
+      assertThat(config.getMaxCacheSize()).isEqualTo(5000);
+   }
+
+
+
+   /***************************************************************************
+    ** Test CUSTOM provider setters.
+    ***************************************************************************/
+   @Test
+   void testCustomProviderSetters()
+   {
+      QCodeReference codeRef = new QCodeReference(String.class);
+
+      QSessionStoreQBitConfig config = new QSessionStoreQBitConfig()
+         .withProviderType(QSessionStoreProviderType.CUSTOM)
+         .withCustomProviderCodeReference(codeRef);
+
+      assertThat(config.getCustomProviderCodeReference()).isSameAs(codeRef);
+
+      // Test standard setter too
+      QCodeReference codeRef2 = new QCodeReference(Integer.class);
+      config.setCustomProviderCodeReference(codeRef2);
+      assertThat(config.getCustomProviderCodeReference()).isSameAs(codeRef2);
    }
 
 }
