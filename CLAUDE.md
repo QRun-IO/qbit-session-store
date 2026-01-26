@@ -6,21 +6,33 @@ QBit providing pluggable session storage/caching for QQQ applications. Implement
 
 **Current Version:** 0.1.0-SNAPSHOT
 **License:** Apache-2.0
+**Status:** Implementation complete, unit tested, documented
+
+## Session Continuity
+
+When resuming work, read `docs/SESSION-STATE.md` for current status and next steps.
 
 ## Build Commands
 
 ```bash
 mvn clean compile           # Compile
-mvn clean test              # Run unit tests
-mvn clean verify            # Build + tests + coverage
+mvn clean test              # Run unit tests (65 tests)
+mvn clean verify            # Build + tests + coverage check
 mvn clean install           # Install to local repo
 ```
+
+## Test Coverage
+
+- **65 unit tests** - all passing
+- **62% instruction coverage** (threshold: 60%)
+- **80%+ class coverage** (threshold: 80%)
+- Provider operation logic (store/load/remove) requires integration tests with real services
 
 ## Project Structure
 
 ```
 src/main/java/com/kingsrook/qbits/sessionstore/
-├── QSessionStoreProviderInterface.java   # Strategy interface
+├── QSessionStoreProviderInterface.java   # Strategy interface (extends core)
 ├── QSessionStoreProviderFactory.java     # Factory for strategy selection
 ├── QSessionStoreProviderType.java        # Enum: IN_MEMORY, TABLE_BASED, REDIS, CUSTOM
 ├── QSessionStoreQBitConfig.java          # Configuration
@@ -37,6 +49,12 @@ src/main/java/com/kingsrook/qbits/sessionstore/
 │   └── CleanExpiredSessionsProcessMetaDataProducer.java
 └── processes/
     └── CleanExpiredSessionsStep.java
+
+docs/
+├── SESSION-STATE.md         # Current session state for continuity
+├── HOW-TO-REDIS.md          # Developer guide for Redis integration
+├── DAILY-BUILD-POST.md      # Blog post (published to QQQ discussions)
+└── MARKETING-SITE.md        # Full documentation for marketing site
 ```
 
 ## Provider Details
@@ -53,12 +71,11 @@ src/main/java/com/kingsrook/qbits/sessionstore/
 ```java
 new QSessionStoreQBitProducer()
    .withConfig(new QSessionStoreQBitConfig()
-      .withProviderType(QSessionStoreProviderType.TABLE_BASED)
-      .withBackendName("primaryBackend")
-      .withTableNamePrefix("myapp_")  // Optional: prefix for table names
+      .withProviderType(QSessionStoreProviderType.REDIS)
+      .withRedisHost("localhost")
       .withDefaultTtl(Duration.ofHours(8))
       .withEnableSlidingExpiration(true))
-   .produce(qInstance);
+   .produce(qInstance, "sessionStore");
 ```
 
 ## Configuration Options
@@ -75,13 +92,20 @@ new QSessionStoreQBitProducer()
 | redisHost | - | Required for REDIS |
 | redisPort | 6379 | Redis port |
 | redisKeyPrefix | "qqq:session:" | Redis key namespace |
+| enableCleanupProcess | true | Register cleanup scheduler |
+| cleanupIntervalSeconds | 300 | Cleanup interval (no-op for Redis) |
+
+## Architecture Notes
+
+- **Core integration:** Registers with `QSessionStoreRegistry` in qqq-backend-core
+- **Optimized operations:** `loadAndTouch()` combines load + TTL reset in one round-trip
+- **Redis 6.2+:** Uses atomic `GETEX` command with fallback for older versions
+- **Table-based:** Uses `QSystemUserSession` for internal operations
 
 ## Table Schema (TABLE_BASED)
 
-The QBit creates table metadata automatically. Create the physical table:
-
 ```sql
-CREATE TABLE stored_session (  -- or myapp_stored_session with prefix
+CREATE TABLE stored_session (
    id SERIAL PRIMARY KEY,
    session_uuid VARCHAR(36) NOT NULL UNIQUE,
    user_id VARCHAR(255),
@@ -92,17 +116,13 @@ CREATE TABLE stored_session (  -- or myapp_stored_session with prefix
 );
 ```
 
-**Field constants in StoredSession.java:**
-- `FIELD_ID`, `FIELD_SESSION_UUID`, `FIELD_USER_ID`
-- `FIELD_SESSION_DATA`, `FIELD_EXPIRES_AT`
-- `FIELD_CREATE_DATE`, `FIELD_MODIFY_DATE`
-
 ## Dependencies
 
-- `qqq-backend-core` (required)
-- `redis.clients:jedis` (optional, for Redis provider)
+- `qqq-backend-core` 0.40.0+ (required)
+- `redis.clients:jedis` 5.1.0 (optional, for Redis provider)
 
 ## Related
 
 - GitHub Issue: QRun-IO/qqq#336
-- Design Plan: See `docs/PLAN-session-store-qbit.md` in qqq repo
+- Daily Build Post: https://github.com/orgs/QRun-IO/discussions/384
+- Repo: https://github.com/QRun-IO/qbit-session-store

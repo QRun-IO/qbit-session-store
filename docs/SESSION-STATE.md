@@ -4,7 +4,7 @@
 
 ## Current Status
 
-Implementation and unit testing complete. Ready for release.
+Implementation complete. Blog published. Ready for 0.1.0 release.
 
 ## Completed
 
@@ -26,6 +26,7 @@ Implementation and unit testing complete. Ready for release.
 - [x] HOW-TO-REDIS.md documentation
 - [x] DAILY-BUILD-POST.md for QQQ discussions
 - [x] MARKETING-SITE.md for marketing site
+- [x] Blog published to GitHub Discussions
 
 ## Test Summary
 
@@ -33,10 +34,15 @@ Implementation and unit testing complete. Ready for release.
 - **62% instruction coverage** (threshold: 60%)
 - **80%+ class coverage** (threshold: 80%)
 
+## Published
+
+- **GitHub Discussion:** https://github.com/orgs/QRun-IO/discussions/384
+
 ## Remaining Work (Optional)
 
 - [ ] Redis integration tests with Testcontainers
 - [ ] TableBased integration tests with H2
+- [ ] Cut 0.1.0 release
 
 ## Notes
 
