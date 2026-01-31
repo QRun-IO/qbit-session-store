@@ -21,3 +21,5 @@ Thumbs.db
 
 # Claude Code
 .claude/
+CLAUDE.md
+docs/SESSION-STATE.md
