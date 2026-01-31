@@ -183,6 +183,29 @@
             </executions>
          </plugin>
          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-checkstyle-plugin</artifactId>
+            <version>3.6.0</version>
+            <configuration>
+               <configLocation>checkstyle/config.xml</configLocation>
+               <consoleOutput>true</consoleOutput>
+               <failsOnError>true</failsOnError>
+               <sourceDirectories>
+                  <sourceDirectory>${project.build.sourceDirectory}</sourceDirectory>
+                  <sourceDirectory>${project.build.testSourceDirectory}</sourceDirectory>
+               </sourceDirectories>
+            </configuration>
+            <executions>
+               <execution>
+                  <id>validate</id>
+                  <phase>validate</phase>
+                  <goals>
+                     <goal>check</goal>
+                  </goals>
+               </execution>
+            </executions>
+         </plugin>
+         <plugin>
             <groupId>org.jacoco</groupId>
             <artifactId>jacoco-maven-plugin</artifactId>
             <version>0.8.12</version>

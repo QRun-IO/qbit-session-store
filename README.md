@@ -2,6 +2,22 @@
 
 Pluggable session storage/caching for QQQ applications. Avoids re-deriving expensive session data (security keys, permissions) on every request.
 
+## Why This Exists
+
+Every QQQ request authenticates and builds a `QSession` containing security keys, permissions, and user metadata. For backends like Auth0, that means a network round-trip on every request. This QBit lets you store and reuse sessions across requests with configurable TTL, sliding expiration, and multiple storage backends.
+
+## Project Status
+
+**0.1.0-SNAPSHOT** -- under active development. API may change before 1.0.
+
+## Features
+
+- Four storage backends: in-memory (LRU), QQQ table, Redis, or custom
+- Sliding expiration resets TTL on access
+- Scheduled cleanup process for expired sessions
+- Declarative QBit configuration via `QSessionStoreQBitProducer`
+- Thread-safe across all providers
+
 ## Providers
 
 | Provider | Storage | Best For |
@@ -151,6 +167,10 @@ provider.touch(sessionUuid);
 // Remove
 provider.remove(sessionUuid);
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
