@@ -79,7 +79,7 @@ class TableBasedSessionStoreProviderIT
       /////////////////////////////////////////////////////////////////////////
       // Add authentication (required for QInstance validation)               //
       /////////////////////////////////////////////////////////////////////////
-      qInstance.setAuthentication(new QAuthenticationMetaData()
+      qInstance.withInstanceDefaultAuthentication(new QAuthenticationMetaData()
          .withName("mock")
          .withType(QAuthenticationType.FULLY_ANONYMOUS));
 
@@ -102,7 +102,7 @@ class TableBasedSessionStoreProviderIT
       /////////////////////////////////////////////////////////////////////////
       // Create the database table                                           //
       // Note: RDBMS module uses camelCase names directly with backticks     //
-      // Use TIMESTAMP WITH TIME ZONE to preserve Instant timezone info      //
+      // Use plain TIMESTAMP: QQQ stores Instants as UTC     //
       /////////////////////////////////////////////////////////////////////////
       try(Connection conn = ConnectionManager.getConnection(backend))
       {
@@ -113,9 +113,9 @@ class TableBasedSessionStoreProviderIT
                `sessionUuid` VARCHAR(36) NOT NULL UNIQUE,
                `userId` VARCHAR(255),
                `sessionData` TEXT,
-               `expiresAt` TIMESTAMP WITH TIME ZONE NOT NULL,
-               `createDate` TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-               `modifyDate` TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+               `expiresAt` TIMESTAMP NOT NULL,
+               `createDate` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+               `modifyDate` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """);
       }
