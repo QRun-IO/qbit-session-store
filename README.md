@@ -138,6 +138,53 @@ new QSessionStoreQBitProducer()
    .produce(qInstance);
 ```
 
+### Shared Redis infrastructure
+
+Use `SHARED_REDIS` when the application installs `qbit-redis`. Include that optional
+artifact explicitly in the host and produce its named connection metadata before
+session-store. The Redis runtime owns TLS, credentials, bounded pools and health.
+Session-store owns JSON serialization, session expiry and payload limits.
+
+```java
+new QSessionStoreQBitProducer()
+   .withConfig(new QSessionStoreQBitConfig()
+      .withProviderType(QSessionStoreProviderType.SHARED_REDIS)
+      .withSharedRedis(new SharedRedisSessionStoreSettings(
+         "sessions", "production", "orders-app", "authentication", 65536))
+      .withDefaultTtl(Duration.ofHours(1))
+      .withEnableSlidingExpiration(true))
+   .produce(qInstance);
+```
+
+Settings are connection name, deployment, application, authentication-domain scope,
+and maximum serialized bytes. Nodes serving the same application/domain must use
+identical scope; distinct applications/domains must use distinct scope. Resolve it
+from host configuration, never an unauthenticated request. Redis namespacing encodes
+each segment independently. This provider does not interpret per-user tenant claims.
+
+Operations require the owning Redis runtime to be started. The provider never opens
+or closes a pool and never falls back to another connection. `loadAndTouch` uses
+atomic GETEX when sliding is enabled, plain GET otherwise; Redis 6.2+ is required.
+Missing values are cache misses; infrastructure, size and decoding failures throw.
+Failed remove also throws so logout can retry. TTLs must be 1 ms through 365 days;
+serialized payload bounds may be configured up to 1 MiB. No cleanup job is produced
+because Redis owns expiry. Framework Redis and session-store health checks report
+availability; the provider's status string is only descriptive.
+
+The existing `REDIS` provider retains its independent legacy pool/configuration.
+Selecting `SHARED_REDIS` is explicit and uses a new namespace; it does not migrate
+existing cache entries. A framework runtime service releases its owned registry/context entries in
+`afterApplicationStop`, after dependent services have stopped; it never closes
+the Redis pool. Repeated cleanup is harmless and preserves replacement providers.
+Restart reconstructs registration from metadata after Redis starts. Manual hosts
+must honor the same runtime callbacks. Shared providers weakly reference their
+application so an abandoned pre-start registration cannot retain the owner.
+
+Local acceptance covers real HTTP authentication/logout and Redis outage/retry
+through the core sample's `redis-acceptance` profile. Coordinated artifact
+publication and clean host adoption remain release gates. Redis failover topology
+qualification is future work tracked in [QQQ #1301](https://github.com/QRun-IO/qqq/issues/1301).
+
 ### Custom Provider
 
 ```java
@@ -150,10 +197,18 @@ new QSessionStoreQBitProducer()
 
 ## Accessing the Provider
 
-After producing the QBit, retrieve the provider via context:
+After producing the QBit, retrieve the provider for its owning application.
+Within a request, `getProvider()` uses `QContext.getQInstance()`. Startup and
+background callers should use the explicit overload below. The qbit automatically
+registers against the QInstance supplied to `produce`; it never installs a
+JVM-wide fallback for other applications.
+
+Hosts registering directly with core must use
+`QSessionStoreRegistry.getInstance(qInstance).register(provider)` outside request
+context. See [registration migration](docs/SESSION-REGISTRATION.md).
 
 ```java
-QSessionStoreProviderInterface provider = QSessionStoreQBitContext.getProvider();
+QSessionStoreProviderInterface provider = QSessionStoreQBitContext.getProvider(qInstance);
 
 // Store a session
 provider.store(session.getUuid(), session, Duration.ofHours(1));
@@ -175,3 +230,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ## License
 
 Apache-2.0 - See [LICENSE](LICENSE)
+
+Launcher acceptance covers normal shutdown, failure of a later runtime, and Redis
+authentication failure before session-runtime startup followed by retry. In that
+early failure case no Redis pool is published; the weak pre-start registration
+remains configured but cannot execute session operations until Redis starts.

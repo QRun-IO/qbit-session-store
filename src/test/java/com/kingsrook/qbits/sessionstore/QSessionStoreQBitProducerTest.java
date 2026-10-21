@@ -18,6 +18,7 @@ package com.kingsrook.qbits.sessionstore;
 
 import java.time.Duration;
 import com.kingsrook.qbits.sessionstore.providers.InMemorySessionStoreProvider;
+import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.modules.authentication.QSessionStoreRegistry;
@@ -63,14 +64,19 @@ class QSessionStoreQBitProducerTest
       assertThat(qInstance.getQBits()).hasSize(1);
 
       // Verify provider was created and stored in context
-      assertThat(QSessionStoreQBitContext.getProvider()).isInstanceOf(InMemorySessionStoreProvider.class);
-      assertThat(QSessionStoreQBitContext.getConfig()).isSameAs(config);
+      assertThat(QSessionStoreQBitContext.getProvider(qInstance)).isInstanceOf(InMemorySessionStoreProvider.class);
+      assertThat(QSessionStoreQBitContext.getConfig(qInstance)).isSameAs(config);
 
       // Verify cleanup process was created
       assertThat(qInstance.getProcess("cleanExpiredSessions")).isNotNull();
 
       // Verify registered with core registry
-      assertThat(QSessionStoreRegistry.getInstance().getProvider()).isPresent();
+      assertThat(QSessionStoreRegistry.getInstance(qInstance).getProvider()).isPresent();
+      var originalProvider = QSessionStoreQBitContext.getProvider(qInstance);
+      assertThatThrownBy(() -> new QSessionStoreQBitProducer().withConfig(config).produce(qInstance, "duplicate"))
+         .isInstanceOf(QException.class).hasMessageContaining("already installed");
+      assertThat(QSessionStoreQBitContext.getProvider(qInstance)).isSameAs(originalProvider);
+      assertThat(qInstance.getQBits()).hasSize(1);
    }
 
 
@@ -143,4 +149,41 @@ class QSessionStoreQBitProducerTest
       assertThat(QSessionStoreQBitProducer.VERSION).isEqualTo("0.1.0");
    }
 
+   /***************************************************************************
+    ** Metadata production must target the supplied instance despite caller context.
+    ***************************************************************************/
+   @Test
+   void isolatesApplicationProviders() throws QException
+   {
+      QInstance original = QContext.getQInstance();
+      QInstance first = new QInstance();
+      QInstance second = new QInstance();
+      var firstConfig = new QSessionStoreQBitConfig().withProviderType(QSessionStoreProviderType.IN_MEMORY);
+      var secondConfig = new QSessionStoreQBitConfig().withProviderType(QSessionStoreProviderType.IN_MEMORY);
+      try
+      {
+         QContext.setQInstance(second);
+         new QSessionStoreQBitProducer().withConfig(firstConfig).produce(first, "first");
+         assertThat(QSessionStoreQBitContext.getProvider()).isNull();
+         assertThat(QSessionStoreRegistry.getInstance().getProvider()).isEmpty();
+         new QSessionStoreQBitProducer().withConfig(secondConfig).produce(second, "second");
+         var secondProvider = QSessionStoreQBitContext.getProvider();
+         assertThat(QSessionStoreQBitContext.getConfig()).isSameAs(secondConfig);
+         QContext.setQInstance(first);
+         assertThat(QSessionStoreQBitContext.getConfig()).isSameAs(firstConfig);
+         assertThat(QSessionStoreQBitContext.getProvider()).isNotSameAs(secondProvider);
+         assertThat(QSessionStoreRegistry.getInstance().getProvider()).contains(QSessionStoreQBitContext.getProvider());
+         QSessionStoreQBitContext.clear();
+         QContext.setQInstance(second);
+         assertThat(QSessionStoreQBitContext.getProvider()).isSameAs(secondProvider);
+      }
+      finally
+      {
+         QSessionStoreQBitContext.clear(first);
+         QSessionStoreQBitContext.clear(second);
+         QSessionStoreRegistry.getInstance(first).clear();
+         QSessionStoreRegistry.getInstance(second).clear();
+         QContext.setQInstance(original);
+      }
+   }
 }

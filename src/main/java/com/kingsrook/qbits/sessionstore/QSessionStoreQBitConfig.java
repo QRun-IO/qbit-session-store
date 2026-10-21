@@ -30,6 +30,7 @@ import com.kingsrook.qqq.backend.core.utils.StringUtils;
 public class QSessionStoreQBitConfig implements QBitConfig
 {
    private QSessionStoreProviderType providerType;
+   private SharedRedisSessionStoreSettings sharedRedis;
    private Duration                  defaultTtl                   = Duration.ofHours(1);
    private Boolean                   enableSlidingExpiration      = true;
    private String                    backendName;
@@ -74,6 +75,18 @@ public class QSessionStoreQBitConfig implements QBitConfig
          if(!StringUtils.hasContent(redisHost))
          {
             errors.add("redisHost is required for REDIS provider");
+         }
+      }
+
+      if(providerType == QSessionStoreProviderType.SHARED_REDIS)
+      {
+         if(sharedRedis == null)
+         {
+            errors.add("sharedRedis settings are required for SHARED_REDIS provider");
+         }
+         if(defaultTtl == null || defaultTtl.isNegative() || defaultTtl.compareTo(Duration.ofMillis(1)) < 0 || defaultTtl.compareTo(Duration.ofDays(365)) > 0)
+         {
+            errors.add("Shared Redis default TTL must be between one millisecond and 365 days");
          }
       }
 
@@ -532,6 +545,25 @@ public class QSessionStoreQBitConfig implements QBitConfig
    {
       this.cleanupIntervalSeconds = cleanupIntervalSeconds;
       return (this);
+   }
+
+   /***************************************************************************
+    ** Explicit connection and namespace for the shared Redis provider.
+    ***************************************************************************/
+   public SharedRedisSessionStoreSettings getSharedRedis()
+   {
+      return sharedRedis;
+   }
+
+
+
+   /***************************************************************************
+    ** Select shared infrastructure without retaining Redis credentials here.
+    ***************************************************************************/
+   public QSessionStoreQBitConfig withSharedRedis(SharedRedisSessionStoreSettings settings)
+   {
+      sharedRedis = settings;
+      return this;
    }
 
 }

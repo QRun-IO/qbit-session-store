@@ -18,9 +18,12 @@ package com.kingsrook.qbits.sessionstore;
 
 import com.kingsrook.qbits.sessionstore.providers.InMemorySessionStoreProvider;
 import com.kingsrook.qbits.sessionstore.providers.RedisSessionStoreProvider;
+import com.kingsrook.qbits.sessionstore.providers.SharedRedisSessionStoreProvider;
 import com.kingsrook.qbits.sessionstore.providers.TableBasedSessionStoreProvider;
 import com.kingsrook.qqq.backend.core.actions.customizers.QCodeLoader;
+import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
+import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 
 
 /*******************************************************************************
@@ -34,11 +37,22 @@ public class QSessionStoreProviderFactory
     ***************************************************************************/
    public static QSessionStoreProviderInterface createProvider(QSessionStoreQBitConfig config) throws QException
    {
+      return createProvider(QContext.getQInstance(), config);
+   }
+
+
+
+   /***************************************************************************
+    ** Bind providers needing managed infrastructure to their owning application.
+    ***************************************************************************/
+   public static QSessionStoreProviderInterface createProvider(QInstance instance, QSessionStoreQBitConfig config) throws QException
+   {
       QSessionStoreProviderInterface provider = switch(config.getProviderType())
       {
          case IN_MEMORY -> new InMemorySessionStoreProvider();
          case TABLE_BASED -> new TableBasedSessionStoreProvider();
          case REDIS -> new RedisSessionStoreProvider();
+         case SHARED_REDIS -> new SharedRedisSessionStoreProvider(instance);
          case CUSTOM -> QCodeLoader.getAdHoc(QSessionStoreProviderInterface.class, config.getCustomProviderCodeReference());
       };
 

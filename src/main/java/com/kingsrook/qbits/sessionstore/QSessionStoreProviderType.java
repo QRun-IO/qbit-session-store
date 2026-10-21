@@ -24,5 +24,6 @@ public enum QSessionStoreProviderType
    IN_MEMORY,
    TABLE_BASED,
    REDIS,
+   SHARED_REDIS,
    CUSTOM
 }

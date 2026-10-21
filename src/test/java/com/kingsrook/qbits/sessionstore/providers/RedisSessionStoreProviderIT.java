@@ -27,57 +27,33 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.utility.DockerImageName;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 
 /*******************************************************************************
  ** Integration tests for RedisSessionStoreProvider using Testcontainers.
- ** These tests require Docker to be running. If Docker is not available,
- ** the tests will be skipped.
+ ** These tests require Docker; unavailable infrastructure fails verification.
  *******************************************************************************/
 class RedisSessionStoreProviderIT
 {
    private static final int REDIS_PORT = 6379;
 
-   private static boolean                dockerAvailable = false;
    private static GenericContainer<?>    redis;
    private        RedisSessionStoreProvider provider;
 
 
 
    /***************************************************************************
-    ** Check Docker availability and start container if available.
+    ** Start required Redis infrastructure; failures must fail verification.
     ***************************************************************************/
    @BeforeAll
    static void startContainer()
    {
-      try
-      {
-         dockerAvailable = DockerClientFactory.instance().isDockerAvailable();
-      }
-      catch(Exception e)
-      {
-         dockerAvailable = false;
-      }
-
-      if(dockerAvailable)
-      {
-         try
-         {
-            redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
-               .withExposedPorts(REDIS_PORT);
-            redis.start();
-         }
-         catch(Exception e)
-         {
-            dockerAvailable = false;
-            redis = null;
-         }
-      }
+      redis = new GenericContainer<>(DockerImageName.parse("redis:7.4-alpine"))
+         .withExposedPorts(REDIS_PORT);
+      redis.start();
    }
 
 
@@ -99,9 +75,6 @@ class RedisSessionStoreProviderIT
    @BeforeEach
    void setUp()
    {
-      assumeTrue(dockerAvailable && redis != null && redis.isRunning(),
-         "Docker is not available or Redis container is not running - skipping test");
-
       provider = new RedisSessionStoreProvider();
 
       QSessionStoreQBitConfig config = new QSessionStoreQBitConfig()

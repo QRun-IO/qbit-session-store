@@ -60,6 +60,13 @@ public class QSessionStoreQBitProducer implements QBitProducer
          throw new QException("SessionStore QBit configuration errors: " + String.join(", ", errors));
       }
 
+      if(qInstance.getQBits().values().stream().anyMatch(bit -> GROUP_ID.equals(bit.getGroupId())
+         && ARTIFACT_ID.equals(bit.getArtifactId())))
+      {
+         throw new QException("SessionStore QBit is already installed on this application");
+      }
+      QSessionStoreProviderInterface provider = QSessionStoreProviderFactory.createProvider(qInstance, config);
+
       ///////////////////////////////
       // Register QBit identity //
       ///////////////////////////////
@@ -75,7 +82,6 @@ public class QSessionStoreQBitProducer implements QBitProducer
       ///////////////////////////////
       // Create provider instance //
       ///////////////////////////////
-      QSessionStoreProviderInterface provider = QSessionStoreProviderFactory.createProvider(config);
       LOG.info("Created session store provider", logPair("type", config.getProviderType()));
 
       ///////////////////////////////
@@ -90,7 +96,8 @@ public class QSessionStoreQBitProducer implements QBitProducer
       ///////////////////////////////
       // Produce cleanup process //
       ///////////////////////////////
-      if(Boolean.TRUE.equals(config.getEnableCleanupProcess()))
+      if(Boolean.TRUE.equals(config.getEnableCleanupProcess())
+         && config.getProviderType() != QSessionStoreProviderType.SHARED_REDIS)
       {
          CleanExpiredSessionsProcessMetaDataProducer.produce(qInstance, config);
          LOG.info("Produced cleanup process");
@@ -99,13 +106,17 @@ public class QSessionStoreQBitProducer implements QBitProducer
       ///////////////////////////////
       // Store in context //
       ///////////////////////////////
-      QSessionStoreQBitContext.setConfig(config);
-      QSessionStoreQBitContext.setProvider(provider);
+      QSessionStoreQBitContext.setConfig(qInstance, config);
+      QSessionStoreQBitContext.setProvider(qInstance, provider);
 
       ///////////////////////////////
       // Register with core registry //
       ///////////////////////////////
-      QSessionStoreRegistry.getInstance().register(provider);
+      QSessionStoreRegistry.getInstance(qInstance).register(provider);
+      if(config.getProviderType() == QSessionStoreProviderType.SHARED_REDIS)
+      {
+         qInstance.withRuntimeService(new com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference(SharedRedisSessionStoreRuntimeService.class));
+      }
       LOG.info("Registered session store provider with core registry");
    }
 
