@@ -46,6 +46,113 @@ import static org.junit.jupiter.api.Assertions.*;
 class SharedRedisSessionStoreProviderIT
 {
    /***************************************************************************
+    ** Observed replicated sessions and revocations survive controlled promotion.
+    ** This does not claim survival of writes lost before asynchronous replication.
+    ***************************************************************************/
+   @Test
+   void replicatedSessionsAndRevocationsSurviveControlledPromotion() throws Exception
+   {
+      QInstance original = QContext.getQInstance();
+      try(var network = org.testcontainers.containers.Network.newNetwork();
+          var primary = new GenericContainer<>("redis:7.4-alpine").withNetwork(network).withNetworkAliases("primary").withExposedPorts(6379);
+          var replica = new GenericContainer<>("redis:7.4-alpine").withNetwork(network).withExposedPorts(6379)
+             .withCommand("redis-server", "--replicaof", "primary", "6379"))
+      {
+         primary.start();
+         replica.start();
+         QInstance first = host(primary, "promotion", true);
+         QInstance second = host(replica, "promotion", false);
+         QInstance third = host(replica, "promotion", true);
+         var firstRuntime = new RedisRuntimeService();
+         var secondRuntime = new RedisRuntimeService();
+         var thirdRuntime = new RedisRuntimeService();
+         try
+         {
+            firstRuntime.start(first);
+            secondRuntime.start(second);
+            thirdRuntime.start(third);
+            var a = QSessionStoreQBitContext.getProvider(first);
+            var b = QSessionStoreQBitContext.getProvider(second);
+            var c = QSessionStoreQBitContext.getProvider(third);
+            a.store("active", new QSession().withValue("owner", "alice"), Duration.ofSeconds(60));
+            a.store("revoked", new QSession().withValue("owner", "bob"), Duration.ofSeconds(60));
+            assertTimeoutPreemptively(Duration.ofSeconds(15), () ->
+            {
+               while(true)
+               {
+                  try
+                  {
+                     if(b.load("revoked").isPresent())
+                     {
+                        break;
+                     }
+                  }
+                  catch(redis.clients.jedis.exceptions.JedisConnectionException initialSync)
+                  {
+                     // Initial replica loading can temporarily block reads; the outer deadline stays bounded.
+                  }
+                  Thread.sleep(25);
+               }
+            });
+            assertThrows(RuntimeException.class, () -> b.store("replica-write", new QSession(), null));
+            a.remove("revoked");
+            // Seeing a later write proves this test's deletion reached the replica.
+            a.store("barrier", new QSession(), Duration.ofSeconds(60));
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
+            {
+               while(b.load("barrier").isEmpty())
+               {
+                  Thread.sleep(25);
+               }
+            });
+            assertTrue(b.load("revoked").isEmpty());
+            primary.stop();
+            assertThrows(RuntimeException.class, () -> a.load("active"));
+            var promoted = replica.execInContainer("redis-cli", "REPLICAOF", "NO", "ONE");
+            assertEquals(0, promoted.getExitCode());
+            assertEquals("OK", promoted.getStdout().trim());
+            assertEquals("alice", b.load("active").orElseThrow().getValue("owner"));
+            assertTrue(c.loadAndTouch("revoked").isEmpty());
+            c.touch("revoked");
+            assertTrue(b.load("revoked").isEmpty());
+            b.store("new", new QSession().withValue("owner", "carol"), Duration.ofSeconds(1));
+            assertEquals("carol", c.loadAndTouch("new").orElseThrow().getValue("owner"));
+            var namespace = new RedisNamespace("test", "promotion", "authentication", "session-store");
+            var client = RedisRuntimeService.connection(second, "sessions").client();
+            assertTrue(client.pttl(namespace.key("new")) > 20000);
+            c.remove("active");
+            assertTrue(b.load("active").isEmpty());
+            b.store("expires", new QSession(), Duration.ofMillis(200));
+            assertTimeoutPreemptively(Duration.ofSeconds(3), () ->
+            {
+               while(b.load("expires").isPresent())
+               {
+                  Thread.sleep(25);
+               }
+            });
+            c.touch("expires");
+            assertTrue(c.loadAndTouch("expires").isEmpty());
+         }
+         finally
+         {
+            for(var runtime : List.of(firstRuntime, secondRuntime, thirdRuntime))
+            {
+               runtime.stop();
+               runtime.afterApplicationStop();
+            }
+            for(var instance : List.of(first, second, third))
+            {
+               QSessionStoreQBitContext.clear(instance);
+               QSessionStoreRegistry.getInstance(instance).clear();
+            }
+            QContext.setQInstance(original);
+         }
+      }
+   }
+
+
+
+   /***************************************************************************
     ** Separate nodes share one app's sessions while other apps remain isolated.
     ***************************************************************************/
    @Test
